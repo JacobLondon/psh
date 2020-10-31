@@ -1,0 +1,7 @@
+.vscode
+__pycache__
+psh
+psh.exe
+bin/*.exe
+dir.h
+pshrc.json
