@@ -75,7 +75,6 @@ class Psh:
             cmd = shlex.split(command, posix=False)
         else:
             cmd = command
-        print(cmd)
         proc = subprocess.Popen(cmd)
         try:
             proc.communicate()
