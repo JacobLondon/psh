@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import shlex
 import sys
 
 thisdir = os.path.dirname(os.path.realpath(__file__))
@@ -69,8 +70,13 @@ class Psh:
     def show_ps1(self):
         print(f"{self.workdir}$ ", end='', flush=True)
 
-    def exec(self, command: str):
-        proc = subprocess.Popen(command.split())
+    def exec(self, command):
+        if type(command) is str:
+            cmd = shlex.split(command, posix=False)
+        else:
+            cmd = command
+        print(cmd)
+        proc = subprocess.Popen(cmd)
         try:
             proc.communicate()
         except KeyboardInterrupt:
@@ -109,7 +115,7 @@ class Psh:
         if argc <= 1:
             return ""
         else:
-            return " ".join(argv[1:])
+            return shlex.join(argv[1:])
 
     def refresh_bin_index(self, argc, argv):
         self.bin_index = {}
@@ -127,7 +133,7 @@ class Psh:
         self.command_or = False
 
     def split_line(self, line: str):
-        args = line.split()
+        args = shlex.split(line, posix=False)
         builder = []
         for arg in args:
             if arg == ';':
@@ -170,7 +176,7 @@ class Psh:
 
             else:
                 try:
-                    self.exec(line)
+                    self.exec(argv)
                 except Exception as e:
                     print(e, file=sys.stderr)
             
