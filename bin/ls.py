@@ -1,3 +1,9 @@
+#
+# TODO
+# Add '/' after directory names
+# Sort items into organized columns for horizontal
+#
+
 import os
 import sys
 

@@ -203,7 +203,12 @@ class Psh:
             return
 
         try:
-            os.chdir(argv[1])
+            directory = argv[1]
+            if (directory.startswith('"') and directory.endswith('"')) or \
+                    (directory.startswith("'") and directory.endswith("'")):
+                directory = directory[1:-1]
+
+            os.chdir(directory)
             self.workdir = os.getcwd()
             self.returncode = 0
         except Exception as e:
