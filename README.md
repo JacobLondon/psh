@@ -5,4 +5,5 @@ Python Shell
 https://www.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/cmd/
 
 ## TODO
-Replace bookmarks with aliases
+* TAB autocomplete
+* control keys

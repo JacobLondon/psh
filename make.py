@@ -38,7 +38,7 @@ if not os.path.exists(config):
     {
         ".py": "python"
     },
-    "bookmarks":
+    "aliases":
     {
 
     }

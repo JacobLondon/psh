@@ -1,5 +1,6 @@
 import json
 import os
+import readchar
 import subprocess
 import shlex
 import sys
@@ -33,7 +34,7 @@ class Psh:
             f"{thisdir}/bin",
         ]
 
-        self.bookmarks = {}
+        self.aliases = {}
         self.settings = {}
 
         if (settings := json_read_file(rcfile)):
@@ -42,8 +43,8 @@ class Psh:
         if (path := self.settings.get("path")):
             self.path.extend(path)
 
-        if (bookmarks := self.settings.get("bookmarks")):
-            self.bookmarks = bookmarks
+        if (aliases := self.settings.get("aliases")):
+            self.aliases = aliases 
 
         if (executors := self.settings.get("executors")):
             self.executors = executors
@@ -67,8 +68,12 @@ class Psh:
         self.command_and: bool = False
         self.command_or:  bool = False
 
+        self.ps1 = f"{self.workdir}$ "
+        self.history = []
+        self.history_idx = 0
+
     def show_ps1(self):
-        print(f"{self.workdir}$ ", end='', flush=True)
+        print(self.ps1, end='', flush=True)
 
     def exec(self, command):
         if type(command) is str:
@@ -104,10 +109,10 @@ class Psh:
             return None
         return self.bin_builtins.get(argv[0])
 
-    def lookup_bookmarks(self, argc, argv):
+    def lookup_aliases(self, argc, argv):
         if argc <= 0:
             return None
-        return self.bookmarks.get(argv[0])
+        return self.aliases.get(argv[0])
 
     # get the args after the program name
     def argv_args(self, argc, argv):
@@ -158,27 +163,30 @@ class Psh:
                 self.reset_command_chain()
                 break
 
-            if (bookmark := self.lookup_bookmarks(self.argc, self.argv)):
-                cmd = ["cd", bookmark]
-                self.builtin_cd(len(cmd), cmd)
+            if (alias := self.lookup_aliases(self.argc, self.argv)):
+                if not any(alias.startswith(builtin) for builtin in self.bin_builtins.keys()):
+                    self.exec(alias)
+                else:
+                    self.argv = shlex.split(alias)
+                    self.argc = len(self.argv)
 
-            elif (program := self.lookup_command(self.argc, self.argv)):
+            if (program := self.lookup_command(self.argc, self.argv)):
                 args = self.argv_args(self.argc, self.argv)
                 cmd = f"{program} {args}"
                 try:
                     self.exec(cmd)
                 except Exception as e:
-                    print(e, file=sys.stderr)
+                    print(f"{self.argv}", e, file=sys.stderr)
 
             elif (method := self.lookup_builtin(self.argc, self.argv)):
                 method(self.argc, self.argv)
 
             else:
                 try:
-                    self.exec(argv)
+                    self.exec(self.argv)
                 except Exception as e:
-                    print(e, file=sys.stderr)
-            
+                    print(f"{self.argv}", e, file=sys.stderr)
+
             if self.command_and and self.returncode != 0:
                 self.reset_command_chain()
                 break
@@ -186,10 +194,99 @@ class Psh:
                 self.reset_command_chain()
                 break
 
+    def read_line(self):
+        buf = []
+        cursor = 0
+        end = 0
+
+        while True:
+            ch = readchar.readchar()
+            #print(ch)
+            #print(self.history_idx)
+            if ch == b'\t':
+                print('tab', file=sys.stdout, flush=True)
+            elif ch in (b'\r', b'\n'):
+                print("", file=sys.stdout, flush=True)
+                command = str(b"".join(buf), encoding='utf-8')
+                if not self.history or command != self.history[-1]:
+                    self.history.append(command)
+                    self.history_idx = len(self.history) - 1
+                yield command
+                buf = []
+                cursor = 0
+                end = 0
+
+            # TODO: This is not quite right
+            elif ch == b'\x10': # C-p
+                if self.history:# and self.history_idx - 1 >= 0:
+                    for _ in range(end):
+                        print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+                    buf = [bytes(str(ch), encoding='utf-8') for ch in self.history[self.history_idx]]
+                    print(self.history[self.history_idx], end='', file=sys.stdout, flush=True)
+                    if self.history_idx - 1 >= 0:
+                        self.history_idx -= 1
+                    cursor = len(buf)
+                    end = cursor
+            # TODO: This is not quite right
+            elif ch == b'\x0e': # C-n
+                if self.history_idx + 1 < len(self.history):
+                    for _ in range(end):
+                        print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+                    self.history_idx += 1
+                    buf = [bytes(str(ch), encoding='utf-8') for ch in self.history[self.history_idx]]
+                    print(self.history[self.history_idx], end='', file=sys.stdout, flush=True)
+                    cursor = len(buf)
+                    end = cursor
+
+            elif ch == b'\x01': # C-a
+                if cursor - 1 >= 0:
+                    for _ in range(cursor):
+                        print("\x08", end='', file=sys.stdout, flush=True)
+                    cursor = 0
+            elif ch == b'\x05': # C-e
+                print(str(b"".join(buf[cursor:]), encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                cursor = end
+            elif ch == b'\x03': # C-c
+                raise KeyboardInterrupt
+            elif ch == b'\x04': # C-d
+                raise EOFError
+            elif ch == b'\x08': # backspace
+                if buf and cursor > 0:
+                    buf.pop()
+                    cursor -= 1
+                    end -= 1
+                    print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+            elif ch == b'\x0c': # C-l
+                # TODO: This erases current text, but text remains in buf
+                yield "clear"
+            elif ch == b'\x15': # C-u
+                for _ in range(end - cursor):
+                    print("\x20", end='', file=sys.stdout, flush=True)
+                for _ in range(end):
+                    print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+
+                end -= cursor
+                buf = buf[cursor:]
+                print(str(b"".join(buf), encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                cursor = 0
+            else:
+                if cursor == len(buf) or not buf:
+                    buf.append(ch)
+                    print(str(ch, encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                else:
+                    buf.insert(cursor, ch)
+                    print(str(b"".join(buf[cursor:]), encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                    for _ in range(end - cursor):
+                        print("\x08", end='', file=sys.stdout, flush=True)
+                cursor += 1
+                end += 1
+            #print(buf)
+
     def run(self):
         while True:
             self.show_ps1()
-            for line in sys.stdin:
+            #for line in sys.stdin:
+            for line in self.read_line():
                 self.command(line)
 
                 sys.stdin.flush()
@@ -210,6 +307,7 @@ class Psh:
 
             os.chdir(directory)
             self.workdir = os.getcwd()
+            self.ps1 = f"{self.workdir}$ "
             self.returncode = 0
         except Exception as e:
             print('cd:', e)
