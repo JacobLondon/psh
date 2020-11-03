@@ -199,85 +199,146 @@ class Psh:
         cursor = 0
         end = 0
 
+        upndown = False
+        write = lambda string: print(string, end='', file=sys.stdout, flush=True)
+
         while True:
             ch = readchar.readchar()
             #print(ch)
             #print(self.history_idx)
+
+            if ch not in (b'\x10', b'\x0e'):
+                upndown = False
+
             if ch == b'\t':
                 print('tab', file=sys.stdout, flush=True)
+
             elif ch in (b'\r', b'\n'):
                 print("", file=sys.stdout, flush=True)
                 command = str(b"".join(buf), encoding='utf-8')
                 if not self.history or command != self.history[-1]:
                     self.history.append(command)
-                    self.history_idx = len(self.history) - 1
                 yield command
+                self.history_idx = len(self.history) - 1
                 buf = []
                 cursor = 0
                 end = 0
 
-            # TODO: This is not quite right
+            elif ch == b'\x06': # C-f
+                if cursor < end:
+                    write(str(buf[cursor], encoding='utf-8'))
+                    cursor += 1
+
+            elif ch == b'\x02': # C-b
+                if cursor > 0:
+                    cursor -= 1
+                    write("\x08")
+
             elif ch == b'\x10': # C-p
-                if self.history:# and self.history_idx - 1 >= 0:
+                if self.history and self.history_idx > 0:
                     for _ in range(end):
-                        print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
-                    buf = [bytes(str(ch), encoding='utf-8') for ch in self.history[self.history_idx]]
-                    print(self.history[self.history_idx], end='', file=sys.stdout, flush=True)
-                    if self.history_idx - 1 >= 0:
+                        write("\x08\x20\x08")
+
+                    if upndown and self.history_idx - 1 >= 0:
                         self.history_idx -= 1
+
+                    buf = [bytes(str(ch), encoding='utf-8') for ch in self.history[self.history_idx]]
+                    write(self.history[self.history_idx])
+
+                    upndown = True
                     cursor = len(buf)
                     end = cursor
-            # TODO: This is not quite right
+
             elif ch == b'\x0e': # C-n
                 if self.history_idx + 1 < len(self.history):
                     for _ in range(end):
-                        print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+                        write("\x08\x20\x08")
+
                     self.history_idx += 1
                     buf = [bytes(str(ch), encoding='utf-8') for ch in self.history[self.history_idx]]
-                    print(self.history[self.history_idx], end='', file=sys.stdout, flush=True)
+                    write(self.history[self.history_idx])
+
+                    upndown = True
                     cursor = len(buf)
                     end = cursor
 
             elif ch == b'\x01': # C-a
                 if cursor - 1 >= 0:
                     for _ in range(cursor):
-                        print("\x08", end='', file=sys.stdout, flush=True)
+                        write("\x08")
                     cursor = 0
+
             elif ch == b'\x05': # C-e
-                print(str(b"".join(buf[cursor:]), encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                write(str(b"".join(buf[cursor:]), encoding='utf-8'))
                 cursor = end
+
             elif ch == b'\x03': # C-c
                 raise KeyboardInterrupt
+
             elif ch == b'\x04': # C-d
-                raise EOFError
+                if cursor == end:
+                    raise EOFError
+                elif buf and cursor < len(buf):
+                    for _ in range(end - cursor):
+                        write("\x20")
+                    for _ in buf:
+                        write("\x08\x20\x08")
+
+                    del buf[cursor]
+                    write(str(b"".join(buf), encoding='utf-8'))
+                    end -= 1
+
+                    # move cursor back to where it was
+                    for _ in range(end - cursor):
+                        write("\x08")
+
             elif ch == b'\x08': # backspace
                 if buf and cursor > 0:
-                    buf.pop()
+                    if cursor != end:
+                        for _ in range(end - cursor):
+                            write("\x20")
+                        
+                        for _ in range(end - cursor + 1):
+                            write("\x08")
+
                     cursor -= 1
                     end -= 1
-                    print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+                    del buf[cursor]
+
+                    if cursor != end:
+                        write(str(b"".join(buf[cursor:]), encoding='utf-8'))
+                        for _ in range(end - cursor):
+                            write("\x08")
+                    else:
+                        write("\x08\x20\x08")
+
             elif ch == b'\x0c': # C-l
-                # TODO: This erases current text, but text remains in buf
                 yield "clear"
+                write(str(b"".join(buf), encoding='utf-8'))
+
             elif ch == b'\x15': # C-u
                 for _ in range(end - cursor):
-                    print("\x20", end='', file=sys.stdout, flush=True)
+                    write("\x20")
                 for _ in range(end):
-                    print("\x08\x20\x08", end='', file=sys.stdout, flush=True)
+                    write("\x08\x20\x08")
 
-                end -= cursor
                 buf = buf[cursor:]
-                print(str(b"".join(buf), encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                write(str(b"".join(buf), encoding='utf-8'))
+                if cursor != end:
+                    for _ in buf:
+                        write("\x08")
+                end -= cursor
                 cursor = 0
+
             else:
                 if cursor == len(buf) or not buf:
                     buf.append(ch)
-                    print(str(ch, encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                    write(str(ch, encoding='utf-8'))
                 else:
                     buf.insert(cursor, ch)
-                    print(str(b"".join(buf[cursor:]), encoding='utf-8'), end='', file=sys.stdout, flush=True)
+                    write(str(b"".join(buf[cursor:]), encoding='utf-8'))
                     for _ in range(end - cursor):
-                        print("\x08", end='', file=sys.stdout, flush=True)
+                        write("\x08")
                 cursor += 1
                 end += 1
             #print(buf)
