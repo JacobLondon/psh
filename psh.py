@@ -1,6 +1,8 @@
 import json
 import os
+import getpass
 import readchar
+import socket
 import subprocess
 import shlex
 import sys
@@ -25,6 +27,27 @@ def json_read_file(filename):
         if (d := json_read(fp)):
             fp.close()
             return d
+
+def supports_color():
+    """
+    Returns True if the running system's terminal supports color, and False
+    otherwise.
+    """
+    plat = sys.platform
+    supported_platform = plat != 'Pocket PC' and (plat != 'win32' or 'ANSICON' in os.environ)
+    # isatty is not always implemented, #6223.
+    is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+    return supported_platform and is_a_tty
+
+BLACK = "\u001b[30m"
+RED = "\u001b[31m"
+GREEN = "\u001b[32m"
+YELLOW = "\u001b[33m"
+BLUE = "\u001b[34m"
+MAGENTA = "\u001b[35m"
+CYAN = "\u001b[36m"
+WHITE = "\u001b[37m"
+RESET = "\u001b[0m"
 
 class Psh:
     def __init__(self):
@@ -55,7 +78,6 @@ class Psh:
         self.bin_builtins = {
             "cd": self.builtin_cd,
             "clear": self.builtin_clear,
-            "c": self.builtin_clear,
             "ref": self.refresh_bin_index,
             "exit": self.builtin_exit,
             "help": self.builtin_help,
@@ -68,9 +90,17 @@ class Psh:
         self.command_and: bool = False
         self.command_or:  bool = False
 
-        self.ps1 = f"{self.workdir}$ "
+        self.username = getpass.getuser()
+        self.hostname = socket.gethostname()
+        self.ps1 = self.get_ps1()
         self.history = []
         self.history_idx = 0
+
+    def get_ps1(self):
+        if supports_color():
+            return f"{GREEN}{self.username}@{self.hostname}{RESET}:{BLUE}{os.sep}{self.workdir}{RESET}$ "
+        else:
+            return f"{self.username}@{self.hostname}:{os.sep}{self.workdir}$ "
 
     def show_ps1(self):
         print(self.ps1, end='', flush=True)
@@ -346,7 +376,6 @@ class Psh:
     def run(self):
         while True:
             self.show_ps1()
-            #for line in sys.stdin:
             for line in self.read_line():
                 self.command(line)
 
@@ -362,13 +391,14 @@ class Psh:
 
         try:
             directory = argv[1]
+            # remove the extra set of quotes!!
             if (directory.startswith('"') and directory.endswith('"')) or \
                     (directory.startswith("'") and directory.endswith("'")):
                 directory = directory[1:-1]
 
             os.chdir(directory)
             self.workdir = os.getcwd()
-            self.ps1 = f"{self.workdir}$ "
+            self.ps1 = self.get_ps1()
             self.returncode = 0
         except Exception as e:
             print('cd:', e)
