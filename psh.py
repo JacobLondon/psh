@@ -28,6 +28,15 @@ def json_read_file(filename):
             fp.close()
             return d
 
+def autocomplete(text: str, lookup: list):
+    """
+    Returns the first thing in the list which matches
+    """
+    for completion in lookup:
+        if completion.startswith(text):
+            yield completion
+    yield None
+
 def supports_color():
     """
     Returns True if the running system's terminal supports color, and False
@@ -231,6 +240,7 @@ class Psh:
 
         upndown = False
         write = lambda string: print(string, end='', file=sys.stdout, flush=True)
+        completion = None
 
         while True:
             ch = readchar.readchar()
@@ -241,7 +251,24 @@ class Psh:
                 upndown = False
 
             if ch == b'\t':
-                print('tab', file=sys.stdout, flush=True)
+                complete = None
+                command = str(b"".join(buf), encoding='utf-8')
+                if completion is None:
+                    # check cwd, then each item in each dir on path
+                    lookup = os.listdir(os.getcwd())
+                    for curpath in self.path:
+                        lookup.extend(os.listdir(curpath))
+                    completion = autocomplete(command, lookup)
+                complete = next(completion)
+                if complete:
+                    for _ in range(end):
+                        write("\x08\x20\x08")
+                    write(complete)
+                    buf = [bytes(str(ch), encoding='utf-8') for ch in complete]
+                    cursor = len(buf)
+                    end = cursor
+                else:
+                    completion = None
 
             elif ch in (b'\r', b'\n'):
                 print("", file=sys.stdout, flush=True)
