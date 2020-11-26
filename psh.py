@@ -28,13 +28,13 @@ def json_read_file(filename):
             fp.close()
             return d
 
-def autocomplete(text: str, lookup: list):
+def autocomplete(text: str, lookup: list, prefix=""):
     """
-    Returns the first thing in the list which matches
+    Returns the first thing in the list which matches text
     """
     for completion in lookup:
         if completion.startswith(text):
-            yield completion
+            yield f"{prefix}{completion}"
     yield None
 
 def supports_color():
@@ -247,24 +247,42 @@ class Psh:
             #print(ch)
             #print(self.history_idx)
 
+            # reset history movement
             if ch not in (b'\x10', b'\x0e'):
                 upndown = False
+            # reset autocomplete
+            if ch != b'\t':
+                completion = None
 
             if ch == b'\t':
                 complete = None
                 command = str(b"".join(buf), encoding='utf-8')
+                if command and command[-1] != ' ':
+                    command = command.split()[-1]
                 if completion is None:
-                    # check cwd, then each item in each dir on path
-                    lookup = os.listdir(os.getcwd())
-                    for curpath in self.path:
-                        lookup.extend(os.listdir(curpath))
-                    completion = autocomplete(command, lookup)
+                    # if it ends with a path/notcomplet try to finish it
+                    if '/' in command:
+                        spoint = command.rindex('/')
+                        parent = command[:spoint + 1]
+                        if os.path.isdir(parent):
+                            path = os.listdir(parent)
+                        else: # we don't have errors, we just do nothing
+                            path = []
+                        search = command[spoint + 1:]
+                        completion = autocomplete(search, path, parent)
+                    else:
+                        # check cwd, then each item in each dir on path
+                        lookup = os.listdir(os.getcwd())
+                        for curpath in self.path:
+                            lookup.extend(os.listdir(curpath))
+                        # search regular locations
+                        completion = autocomplete(command, lookup)
                 complete = next(completion)
                 if complete:
-                    for _ in range(end):
+                    for _ in command:
                         write("\x08\x20\x08")
                     write(complete)
-                    buf = [bytes(str(ch), encoding='utf-8') for ch in complete]
+                    buf = buf[:-len(command)] + [bytes(str(ch), encoding='utf-8') for ch in complete]
                     cursor = len(buf)
                     end = cursor
                 else:

@@ -29,10 +29,9 @@ else:
     lflag = False
     directory = os.getcwd()
 
-    for i, arg in enumerate(sys.argv):
+    for i, arg in enumerate(sys.argv[1:]):
         if not arg.startswith("-"):
-            if i > 0:
-                directory = arg
+            directory = arg
             continue
 
         for ch in arg:
