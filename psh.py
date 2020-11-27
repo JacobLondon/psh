@@ -6,6 +6,7 @@ import socket
 import subprocess
 import shlex
 import sys
+from tkinter import Tk
 
 thisdir = os.path.dirname(os.path.realpath(__file__))
 rcfile = f"{thisdir}/etc/pshrc.json"
@@ -298,6 +299,21 @@ class Psh:
                 buf = []
                 cursor = 0
                 end = 0
+
+            elif ch == b'\x16': # C-Shift-v
+                clipboard = Tk().clipboard_get()
+                for char in clipboard:
+                    char = bytes(char, encoding='utf-8')
+                    if cursor == len(buf) or not buf:
+                        buf.append(char)
+                        write(str(char, encoding='utf-8'))
+                    else:
+                        buf.insert(cursor, char)
+                        write(str(b"".join(buf[cursor:]), encoding='utf-8'))
+                        for _ in range(end - cursor):
+                            write("\x08")
+                    cursor += 1
+                    end += 1
 
             elif ch == b'\x06': # C-f
                 if cursor < end:
