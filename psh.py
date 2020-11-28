@@ -91,6 +91,7 @@ class Psh:
             "ref": self.refresh_bin_index,
             "exit": self.builtin_exit,
             "help": self.builtin_help,
+            "?": self.builtin_returncode
         }
         self.refresh_bin_index(None, None)
 
@@ -108,9 +109,9 @@ class Psh:
 
     def get_ps1(self):
         if supports_color():
-            return f"{GREEN}{self.username}@{self.hostname}{RESET}:{BLUE}{os.sep}{self.workdir}{RESET}$ "
+            return f"{GREEN}{self.username}@{self.hostname}{RESET}:{BLUE}{self.workdir}{RESET}$ "
         else:
-            return f"{self.username}@{self.hostname}:{os.sep}{self.workdir}$ "
+            return f"{self.username}@{self.hostname}:{self.workdir}$ "
 
     def show_ps1(self):
         print(self.ps1, end='', flush=True)
@@ -364,7 +365,8 @@ class Psh:
                 cursor = end
 
             elif ch == b'\x03': # C-c
-                raise KeyboardInterrupt
+                #raise KeyboardInterrupt
+                pass
 
             elif ch == b'\x04': # C-d
                 if cursor == end:
@@ -463,6 +465,7 @@ class Psh:
             self.returncode = 0
         except Exception as e:
             print('cd:', e)
+            self.returncode = 1
 
     def builtin_clear(self, argc, argv):
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -479,6 +482,9 @@ class Psh:
             print(key, end="    ")
         print()
         self.returncode = 0
+
+    def builtin_returncode(self, argc, argv):
+        print(self.returncode)
 
 if __name__ == '__main__':
     psh = Psh()

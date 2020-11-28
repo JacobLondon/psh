@@ -5,7 +5,7 @@ TARGET = "psh.exe"
 FILES = "main.c"
 CFLAGS = "-Wall -Wextra"
 
-BIN_FILES = ["src/fgrep.c", "src/grep.c"]
+BIN_FILES = ["src/fgrep.c", "src/grep.c", "src/hexdump.c"]
 
 thisdir = os.path.dirname(os.path.realpath(__file__))
 

@@ -32,16 +32,14 @@ def show(content, directory):
 def horizontal(contents, cwd):
     widest = max(len(content) for content in contents) + 1
     eachrow = columns // widest
+    while len(contents) % eachrow != 0:
+        contents.append('')
 
-    count = 0
     for i, content in enumerate(contents):
         show(content, cwd)
         print(' ' * (widest - len(content)), end='')
         if i % eachrow == eachrow - 1:
             print()
-        count = i
-    if count % (eachrow - 1) != 0:
-        print()
 
 def vertical(contents, cwd):
     for content in contents:
