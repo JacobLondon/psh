@@ -91,6 +91,7 @@ class Psh:
             "ref": self.refresh_bin_index,
             "exit": self.builtin_exit,
             "help": self.builtin_help,
+            "hostname": self.builtin_hostname,
             "?": self.builtin_returncode
         }
         self.refresh_bin_index(None, None)
@@ -481,6 +482,10 @@ class Psh:
         for key in commands:
             print(key, end="    ")
         print()
+        self.returncode = 0
+
+    def builtin_hostname(self, argc, argv):
+        print(self.hostname)
         self.returncode = 0
 
     def builtin_returncode(self, argc, argv):
